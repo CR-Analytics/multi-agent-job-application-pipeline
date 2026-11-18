@@ -1,7 +1,7 @@
 """SQLite-backed job application tracker.
 
 Stores one row per job application in `applications.db` (same folder as the project).
-- Upserts by (company, position): existing jobs are updated, new ones are inserted.
+- Upserts by URL: an existing URL is overwritten, a new URL inserts a new row.
 - Extra columns can be added at runtime via `ensure_column()` / the CLI `add-column`.
 - Use the CLI (`python tracker.py ...`) or import the functions to refine entries.
 """
@@ -64,19 +64,17 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(f"CREATE TABLE IF NOT EXISTS applications ({columns})")
     existing = {row["name"] for row in conn.execute("PRAGMA table_info(applications)")}
     schema_version = conn.execute("PRAGMA user_version").fetchone()[0]
-    if schema_version < 1:
-        # One-time migration: drop columns that were removed from the schema
-        for name in REMOVED_COLUMNS & existing:
-            conn.execute(f"ALTER TABLE applications DROP COLUMN {_quote_identifier(name)}")
     # Ensure all core columns exist even in databases created before they were added
     for name, sql_type in CORE_COLUMNS.items():
         if name not in existing:
             conn.execute(
                 f"ALTER TABLE applications ADD COLUMN {_quote_identifier(name)} {sql_type}"
             )
+    # The job's identity is its URL: one row per unique URL 
+    conn.execute("DROP INDEX IF EXISTS idx_app_company_position")
     conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_app_company_position "
-        "ON applications (lower(company), lower(position))"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_app_url "
+        "ON applications (lower(url))"
     )
     if schema_version < 1:
         conn.execute("PRAGMA user_version = 1")
@@ -109,9 +107,9 @@ def _normalize(value) -> str | None:
 def upsert_job(conn: sqlite3.Connection, job: dict) -> tuple[int, bool]:
     """Insert a job, or update the existing row.
 
-    Matches first by URL (case-insensitive); if no URL match exists, falls back
-    to (company, position) so a changed URL still updates the same entry.
-    A new row is only inserted when neither matches.
+    The job's identity is its URL: a listing whose URL already exists in the
+    database (case-insensitive) is overwritten; any other URL — or a missing
+    URL with an unseen (company, position) pair — creates a new row.
 
     Returns (row_id, was_inserted).
     """
@@ -124,13 +122,17 @@ def upsert_job(conn: sqlite3.Connection, job: dict) -> tuple[int, bool]:
     url = _normalize(job.get("url"))
 
     if url:
-        # A known URL identifies the job uniquely — match on it first
         row = conn.execute(
             "SELECT id FROM applications WHERE lower(url) = lower(?)",
             (url,),
         ).fetchone()
     else:
-        row = None
+        # No URL to key on — fall back to (company, position)
+        row = conn.execute(
+            "SELECT id FROM applications WHERE lower(company) = lower(?) "
+            "AND lower(position) = lower(?)",
+            (company, position),
+        ).fetchone()
 
 
 
