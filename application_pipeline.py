@@ -154,11 +154,11 @@ cover_letter_writer = Agent(
 # ==========================================
 
 # Paste a real job posting URL here, or pass it as a command-line argument:
-#   python untitled0.py https://example.com/jobs/123
+#   python application_pipeline.py https://example.com/jobs/123
 job_url = (
     sys.argv[1]
     if len(sys.argv) > 1
-    else "https://job.hdi.group/job/Hannover-Werkstudentin-Strategie-und-Transformation/1381-de_DE/?feedId=436633&utm_source=CareerSite"
+    else "https://example.com/jobs/123"
 )
 
 job_text = fetch_webpage_text(job_url)
