@@ -1,0 +1,6 @@
+crewai
+google-genai
+pdfplumber
+pydantic
+python-dotenv
+requests

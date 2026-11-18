@@ -1,0 +1,10 @@
+# Sensitive credentials & database
+.env
+applications.db
+
+# Personal documents (so your CV and certificates stay private on GitHub)
+*.pdf
+cover_letter_draft.txt
+
+# Python cache files
+__pycache__/
